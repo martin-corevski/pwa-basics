@@ -17,19 +17,16 @@ var STATIC_FILES = [
 
 // Trimming the cache can be done wherever we please in the fetch listener.
 function trimCache(cacheName, maxItems) {
-  caches
-    .open(cacheName)
-    .then(function(cache) {
-      // Get all the requests from the cache
-      return cache.keys()
-    })
-    .then(function(keys) {
+  caches.open(cacheName).then(function(cache) {
+    // Get all the requests from the cache
+    return cache.keys().then(function(keys) {
       if (keys.length > maxItems) {
         // Remove oldest item from cache and continue trimming until the cache
         // has less items than the maxItems set.
         cache.delete(keys[0]).then(trimCache(cacheName, maxItems))
       }
     })
+  })
 }
 
 // Dom events are not available, only specific service worker events are
@@ -193,7 +190,8 @@ function isInStaticFiles(request, files) {
 }
 
 self.addEventListener('fetch', function(event) {
-  var getUrl = 'https://httpbin.org/get'
+  // Set your firebase url, add .json at the end
+  var getUrl = ''
 
   // Only put assets in dynamic cache if the request is for specific url
   if (event.request.url.indexOf(getUrl) > -1) {

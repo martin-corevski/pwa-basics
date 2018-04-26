@@ -62,24 +62,24 @@ function clearCards() {
   }
 }
 
-function createCard() {
+function createCard(data) {
   var cardWrapper = document.createElement('div')
   cardWrapper.className = 'shared-moment-card mdl-card mdl-shadow--2dp'
   cardWrapper.style.margin = 'auto'
   var cardTitle = document.createElement('div')
   cardTitle.className = 'mdl-card__title'
-  cardTitle.style.backgroundImage = 'url("/src/images/sf-boat.jpg")'
+  cardTitle.style.backgroundImage = 'url(' + data.image + ')'
   cardTitle.style.backgroundSize = 'cover'
   cardTitle.style.height = '180px'
   cardWrapper.appendChild(cardTitle)
   var cardTitleTextElement = document.createElement('h2')
   cardTitleTextElement.style.color = 'white'
   cardTitleTextElement.className = 'mdl-card__title-text'
-  cardTitleTextElement.textContent = 'San Francisco Trip'
+  cardTitleTextElement.textContent = data.title
   cardTitle.appendChild(cardTitleTextElement)
   var cardSupportingText = document.createElement('div')
   cardSupportingText.className = 'mdl-card__supporting-text'
-  cardSupportingText.textContent = 'In San Francisco'
+  cardSupportingText.textContent = data.location
   cardSupportingText.style.textAlign = 'center'
   // Not in use uncomment if dynamic cache is disabled
   // var cardButtonSave = document.createElement('button')
@@ -91,19 +91,27 @@ function createCard() {
   sharedMomentsArea.appendChild(cardWrapper)
 }
 
-// fetch('https://httpbin.org/get')
-//   .then(function(res) {
-//     return res.json()
-//   })
-//   .then(function(data) {
-//     createCard()
-//   })
+function createCards(data) {
+  clearCards()
+  for (var i = 0; i < data.length; i++) {
+    createCard(data[i])
+  }
+}
+
+function updateUI(data) {
+  var cards = []
+  for (var card in data) {
+    cards.push(data[card])
+  }
+  createCards(cards)
+}
 
 //////////////////////////////////////////
 // STRATEGY: CACHE THEN NETWORK updates //
 //////////////////////////////////////////
 
-var getUrl = 'https://httpbin.org/get'
+// Set your firebase url, add .json at the end
+var getUrl = ''
 var netDataReceived = false
 
 fetch(getUrl)
@@ -113,8 +121,7 @@ fetch(getUrl)
   .then(function(data) {
     netDataReceived = true
     console.log('From network', data)
-    clearCards()
-    createCard()
+    updateUI(data)
   })
 
 if ('caches' in window) {
@@ -129,8 +136,7 @@ if ('caches' in window) {
       console.log('From cache', data)
       // Don't override the data received from network with the one from cache
       if (!netDataReceived) {
-        clearCards()
-        createCard()
+        updateUI(data)
       }
     })
 }
