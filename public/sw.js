@@ -1,5 +1,36 @@
-var STATIC_CACHE_NAME = 'static-v3'
-var DYNAMIC_CACHE_NAME = 'dynamic-v3'
+var STATIC_CACHE_NAME = 'static-v10'
+var DYNAMIC_CACHE_NAME = 'dynamic-v5'
+var STATIC_FILES = [
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/src/js/app.js',
+  '/src/js/feed.js',
+  '/src/js/material.min.js',
+  '/src/css/app.css',
+  '/src/css/feed.css',
+  '/src/images/main-image.jpg',
+  'https://fonts.googleapis.com/css?family=Roboto:400,700',
+  'https://fonts.googleapis.com/icon?family=Material+Icons',
+  'https://cdnjs.cloudflare.com/ajax/libs/material-design-lite/1.3.0/material.indigo-pink.min.css'
+]
+
+// Trimming the cache can be done wherever we please in the fetch listener.
+function trimCache(cacheName, maxItems) {
+  caches
+    .open(cacheName)
+    .then(function(cache) {
+      // Get all the requests from the cache
+      return cache.keys()
+    })
+    .then(function(keys) {
+      if (keys.length > maxItems) {
+        // Remove oldest item from cache and continue trimming until the cache
+        // has less items than the maxItems set.
+        cache.delete(keys[0]).then(trimCache(cacheName, maxItems))
+      }
+    })
+}
 
 // Dom events are not available, only specific service worker events are
 self.addEventListener('install', function(event) {
@@ -19,19 +50,7 @@ self.addEventListener('install', function(event) {
       // cache.add('/')
       // cache.add('/index.html')
       // cache.add('/src/js/app.js')
-      cache.addAll([
-        '/',
-        '/index.html',
-        '/src/js/app.js',
-        '/src/js/feed.js',
-        '/src/js/material.min.js',
-        '/src/css/app.css',
-        '/src/css/feed.css',
-        '/src/images/main-image.jpg',
-        'https://fonts.googleapis.com/css?family=Roboto:400,700',
-        'https://fonts.googleapis.com/icon?family=Material+Icons',
-        'https://cdnjs.cloudflare.com/ajax/libs/material-design-lite/1.3.0/material.indigo-pink.min.css'
-      ])
+      cache.addAll(STATIC_FILES)
       // Fetching from other CDNs (servers) is also possible but they need to
       // have the appropriate cors headers set in order to avoid errors.
     })
@@ -56,41 +75,182 @@ self.addEventListener('activate', function(event) {
   )
   return self.clients.claim()
 })
+
+///////////////////////////////////////////
+// STRATEGY: CACHE WITH NETWORK FALLBACK //
+///////////////////////////////////////////
+
 // Fetch event is triggered by the application. See
 // https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers
 // under 'Custom responses to requests'
+// self.addEventListener('fetch', function(event) {
+//   // console.log('[Service Worker] Fetching... ', event)
+//   // https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent/respondWith
+//   event.respondWith(
+//     caches.match(event.request).then(function(response) {
+//       // Even if we don't get a Promise that resolves to the response associated
+//       // with the first matching request in the cache object we still don't use
+//       // catch because the response will be undefined and it can be handled in
+//       // this method.
+//       // https://developer.mozilla.org/en-US/docs/Web/API/Cache/match
+//       if (response) {
+//         return response
+//       } else {
+//         // In the case we don't get a response (cached asset) we continue
+//         // fetching from the network.
+//         return fetch(event.request)
+//           .then(function(res) {
+//             // Dynamic caching, caching files that are not part of the current
+//             // static cache (not pre-cached).
+//             return caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
+//               // Trim the dynamic cache because it might get too big. This
+//               // way the maximum number of request in the dynamic cache is 4
+//               trimCache(DYNAMIC_CACHE_NAME, 3)
+//               // Put unlike add needs two arguments to create the key value pair.
+//               // The response without clone function will be consumed (used) and
+//               // won't be available again, it will be empty.
+//               cache.put(event.request.url, res.clone())
+//               return res
+//             })
+//           })
+//           .catch(function(err) {
+//             // Handle fetch errors
+//             // In case some page wasn't cached use a fallback page
+//             return caches.open(STATIC_CACHE_NAME).then(function(cache) {
+//              // Go to the fallback page only if help route is requested
+//              // and it's not in the cache.
+//              // if (event.request.url.indexOf('/help')) {
+//              if (event.request.headers.get('accept').includes('text/html')) {
+//              // We can return any type of file, as long as we have it cached.
+//              // If an image is not available we can return a dummy img...
+//                return cache.match('/offline.html')
+//              }
+//             })
+//           })
+//       }
+//       // PS: In other words these 'if else' conditions fetch assets from the
+//       // cache if they are there and if they are not it will fetch the network requests
+//     })
+//   )
+// })
+
+//////////////////////////
+// STRATEGY: CACHE ONLY //
+//////////////////////////
+
+// self.addEventListener('fetch', function(event) {
+//   event.respondWith(
+//     caches.match(event.request)
+//   )
+// })
+
+////////////////////////////
+// STRATEGY: NETWORK ONLY //
+////////////////////////////
+
+// self.addEventListener('fetch', function(event) {
+//   event.respondWith(
+//     fetch(event.request)
+//   )
+// })
+
+///////////////////////////////////////////
+// STRATEGY: NETWORK WITH CACHE FALLBACK //
+///////////////////////////////////////////
+
+// self.addEventListener('fetch', function(event) {
+//   event.respondWith(
+//     fetch(event.request)
+//       .then(function(res) {
+//         // Dinamyc caching can be used with this strategy but it's still
+//         // a bad user experience to wait for something that can be
+//         // delivered from the cache (or a fallback page can be shown)
+//         // right away.
+//         return caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
+//           cache.put(event.request.url, res.clone())
+//           return res
+//         })
+//       })
+//       .catch(function(err) {
+//         return caches.match(event.request)
+//       })
+//   )
+// })
+
+//////////////////////////////////
+// STRATEGY: CACHE THEN NETWORK //
+//////////////////////////////////
+
+function isInStaticFiles(request, files) {
+  for (var i = 0; i < files.length; i++) {
+    if (files[i] === request) {
+      return true
+    } else if ('http://localhost:8080' + files[i] === request) {
+      return true
+    }
+  }
+  return false
+}
+
 self.addEventListener('fetch', function(event) {
-  // console.log('[Service Worker] Fetching... ', event)
-  event.respondWith(
-    caches.match(event.request).then(function(response) {
-      // Even if we don't get a Promise that resolves to the response associated
-      // with the first matching request in the cache object we still don't use
-      // catch because the response will be undefined and it can be handled in
-      // this method.
-      // https://developer.mozilla.org/en-US/docs/Web/API/Cache/match
-      if (response) {
-        return response
-      } else {
-        // In the case we don't get a response (cached asset) we continue
-        // fetching from the network.
-        return fetch(event.request)
-          .then(function(res) {
-            // Dynamic caching, caching files that are not part of the current
-            // static cache (not pre-cached).
-            return caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
-              // Put unlike add needs two arguments to create the key value pair.
-              // The response without clone function will be consumed (used) and
-              // won't be available again, it will be empty.
-              cache.put(event.request.url, res.clone())
-              return res
+  var getUrl = 'https://httpbin.org/get'
+
+  // Only put assets in dynamic cache if the request is for specific url
+  if (event.request.url.indexOf(getUrl) > -1) {
+    event.respondWith(
+      // open the dynamic cache
+      caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
+        // intercept the event requests, including the one in feed.js
+        return fetch(event.request).then(function(res) {
+          trimCache(DYNAMIC_CACHE_NAME, 3)
+          // put the response in the cache as a key value pair
+          cache.put(event.request, res.clone())
+          return res
+        })
+      })
+    )
+  } else if (isInStaticFiles(event.request.url, STATIC_FILES)) {
+    // else if (
+    //   new RegExp('\\b' + STATIC_FILES.join('\\b|\\b') + '\\b').test(
+    //     event.request.url
+    //   )
+    // )
+    // The regex created looks like this: \b/a\b|\b/index.html\b|\b ...
+    // \b/src/js/feed.js\b and so on until the last element in the array and at
+    // the end it has \b. The \b creates word boundaries, when
+    // event.request.url is http://localhost:8080/src/js/feed.js the regexp test
+    // will return true because it has /src/js/feed.js in the url. More on \b
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+    // under 'Using special characters'
+
+    // Use cache only strategy
+    event.respondWith(caches.match(event.request))
+  } else {
+    // If we are in offline mode find assets from the static cache
+    event.respondWith(
+      caches.match(event.request).then(function(response) {
+        if (response) {
+          return response
+        } else {
+          return fetch(event.request)
+            .then(function(res) {
+              return caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
+                trimCache(DYNAMIC_CACHE_NAME, 3)
+                cache.put(event.request.url, res.clone())
+                return res
+              })
             })
-          })
-          .catch(function(err) {
-            // Handle fetch errors
-          })
-      }
-      // PS: In other words these 'if else' conditions fetch assets from the
-      // cache if they are there and if they are not it will fetch the network requests
-    })
-  )
+            .catch(function(err) {
+              return caches.open(STATIC_CACHE_NAME).then(function(cache) {
+                // Go to the fallback page only if help route is requested
+                // and it's not in the cache.
+                if (event.request.headers.get('accept').includes('text/html')) {
+                  return cache.match('/offline.html')
+                }
+              })
+            })
+        }
+      })
+    )
+  }
 })
