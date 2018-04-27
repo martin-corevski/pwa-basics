@@ -124,19 +124,27 @@ fetch(getUrl)
     updateUI(data)
   })
 
-if ('caches' in window) {
-  caches
-    .match(getUrl)
-    .then(function(res) {
-      if (res) {
-        return res.json()
-      }
-    })
-    .then(function(data) {
-      console.log('From cache', data)
-      // Don't override the data received from network with the one from cache
-      if (!netDataReceived) {
-        updateUI(data)
-      }
-    })
+if ('indexedDB' in window) {
+  readAllData('posts').then(function(data) {
+    if (!netDataReceived) {
+      console.log('From cache idb: ', data)
+      updateUI(data)
+    }
+  })
 }
+// if ('caches' in window) {
+//   caches
+//     .match(getUrl)
+//     .then(function(res) {
+//       if (res) {
+//         return res.json()
+//       }
+//     })
+//     .then(function(data) {
+//       console.log('From cache', data)
+//       // Don't override the data received from network with the one from cache
+//       if (!netDataReceived) {
+//         updateUI(data)
+//       }
+//     })
+// }

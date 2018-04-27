@@ -1,9 +1,13 @@
-var STATIC_CACHE_NAME = 'static-v10'
+importScripts('/src/js/idb.js')
+importScripts('/src/js/utility.js')
+
+var STATIC_CACHE_NAME = 'static-v15'
 var DYNAMIC_CACHE_NAME = 'dynamic-v5'
 var STATIC_FILES = [
   '/',
   '/index.html',
   '/offline.html',
+  '/src/js/idb.js',
   '/src/js/app.js',
   '/src/js/feed.js',
   '/src/js/material.min.js',
@@ -196,15 +200,20 @@ self.addEventListener('fetch', function(event) {
   // Only put assets in dynamic cache if the request is for specific url
   if (event.request.url.indexOf(getUrl) > -1) {
     event.respondWith(
-      // open the dynamic cache
-      caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
-        // intercept the event requests, including the one in feed.js
-        return fetch(event.request).then(function(res) {
-          trimCache(DYNAMIC_CACHE_NAME, 3)
-          // put the response in the cache as a key value pair
-          cache.put(event.request, res.clone())
-          return res
-        })
+      // intercept the event requests, including the one in feed.js
+      fetch(event.request).then(function(res) {
+        var clonedRes = res.clone()
+        // A post might have been deleted, clear idb and add (cache) the posts again
+        clearAllData('posts')
+          .then(function() {
+            return clonedRes.json()
+          })
+          .then(function(data) {
+            for (var post in data) {
+              writeData('posts', data[post])
+            }
+          })
+        return res
       })
     )
   } else if (isInStaticFiles(event.request.url, STATIC_FILES)) {
@@ -233,7 +242,7 @@ self.addEventListener('fetch', function(event) {
           return fetch(event.request)
             .then(function(res) {
               return caches.open(DYNAMIC_CACHE_NAME).then(function(cache) {
-                trimCache(DYNAMIC_CACHE_NAME, 3)
+                // trimCache(DYNAMIC_CACHE_NAME, 3)
                 cache.put(event.request.url, res.clone())
                 return res
               })
