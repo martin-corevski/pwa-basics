@@ -19,6 +19,11 @@ var STATIC_FILES = [
   'https://cdnjs.cloudflare.com/ajax/libs/material-design-lite/1.3.0/material.indigo-pink.min.css'
 ]
 
+// Set your firebase url, add .json at the end
+var getUrl = ''
+// Set your firebase functions url
+var postUrl = ''
+
 // Trimming the cache can be done wherever we please in the fetch listener.
 function trimCache(cacheName, maxItems) {
   caches.open(cacheName).then(function(cache) {
@@ -194,9 +199,6 @@ function isInStaticFiles(request, files) {
 }
 
 self.addEventListener('fetch', function(event) {
-  // Set your firebase url, add .json at the end
-  var getUrl = ''
-
   // Only put assets in dynamic cache if the request is for specific url
   if (event.request.url.indexOf(getUrl) > -1) {
     event.respondWith(
@@ -255,6 +257,50 @@ self.addEventListener('fetch', function(event) {
                   return cache.match('/offline.html')
                 }
               })
+            })
+        }
+      })
+    )
+  }
+})
+
+// This event will fire up when we have POST data for background sync, for both
+// offline and online cases. For offline as soon as we get internet connection,
+// for online right away or if the user closed the app on the next "login".
+self.addEventListener('sync', function(event) {
+  console.log('[Service Worker] Syncing...')
+  if (event.tag === 'sync-new-post') {
+    console.log('[Service Worker] Syncing new posts...')
+    // Ensure that we wait for data to be sent
+    event.waitUntil(
+      readAllData('sync-posts').then(function(data) {
+        for (dt of data) {
+          fetch(postUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json'
+            },
+            body: JSON.stringify({
+              id: dt.id,
+              title: dt.title,
+              location: dt.location,
+              image: 'xXx'
+            })
+          })
+            .then(function(res) {
+              console.log('Data sent: ', res)
+              // If the response is in the range of 200 it means the data has
+              // been added to the database.
+              if (res.ok) {
+                // Now we can clear the sync "buffer"
+                res.json().then(function(resData) {
+                  deleteItem('sync-posts', resData.id)
+                })
+              }
+            })
+            .catch(function(err) {
+              console.log('Error while sending data: ', err)
             })
         }
       })

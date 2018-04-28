@@ -10,6 +10,10 @@ var dbPromise = idb.open('posts-store', 1, function(db) {
     // You can also pass in an array as a keyPath.
     db.createObjectStore('posts', { keyPath: 'id' })
   }
+  // Object store for sync tasks POST data
+  if (!db.objectStoreNames.contains('sync-posts')) {
+    db.createObjectStore('sync-posts', { keyPath: 'id' })
+  }
 })
 
 function writeData(st, data) {
@@ -44,8 +48,20 @@ function clearAllData(st) {
     var store = tx.objectStore(st)
     // In order to delete everything we use clear.
     store.clear()
-    // For single item we need to delete by id, this would be a separate function ofc.
-    // store.delete(id)
     return tx.complete
   })
+}
+
+function deleteItem(st, id) {
+  dbPromise
+    .then(function(db) {
+      var tx = db.transaction(st, 'readwrite')
+      var store = tx.objectStore(st)
+      // For single item we need to delete by id, this would be a separate function ofc.
+      store.delete(id)
+      return tx.complete
+    })
+    .then(function() {
+      console.log('Deleted item with id: ', id)
+    })
 }

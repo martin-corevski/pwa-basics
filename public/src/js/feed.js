@@ -4,6 +4,14 @@ var closeCreatePostModalButton = document.querySelector(
   '#close-create-post-modal-btn'
 )
 var sharedMomentsArea = document.querySelector('#shared-moments')
+var form = document.querySelector('form')
+var inputTitle = document.querySelector('#title')
+var inputLocation = document.querySelector('#location')
+
+// Set your firebase url, add .json at the end
+var getUrl = ''
+// Set your firebase functions url
+var postUrl = ''
 
 function openCreatePostModal() {
   createPostArea.style.display = 'block'
@@ -91,6 +99,66 @@ function createCard(data) {
   sharedMomentsArea.appendChild(cardWrapper)
 }
 
+// POST data fallback function if SyncManager is not available
+function sendData() {
+  fetch(postUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      id: new Date().toISOString(),
+      title: inputTitle.value,
+      location: inputLocation.value,
+      image: 'xXx'
+    })
+  }).then(function(res) {
+    console.log('Data sent: ', res)
+    // updateUI()
+  })
+}
+
+form.addEventListener('submit', function(event) {
+  event.preventDefault()
+  if (inputTitle.value.trim() === '' || inputLocation.value.trim() === '') {
+    window.alert('Please enter valid data.')
+    return
+  }
+
+  closeCreatePostModal()
+
+  if ('serviceWorker' in navigator && 'SyncManager' in window) {
+    navigator.serviceWorker.ready.then(function(sw) {
+      // Set the POST data to be synced
+      var post = {
+        id: new Date().toISOString(),
+        title: inputTitle.value,
+        location: inputLocation.value
+      }
+      // Keep the POST data in indexedDB in specific Object store
+      writeData('sync-posts', post)
+        .then(function() {
+          // Register a sync task with the service worker, the only argument is
+          // id (event.tag) by which we will do the synchronization in the
+          // service worker once we get online again.
+          return sw.sync.register('sync-new-post')
+        })
+        .then(function() {
+          var snackbarContainer = document.querySelector('#confirmation-toast')
+          var data = { message: 'Post saved for sync!' }
+          snackbarContainer.MaterialSnackbar.showSnackbar(data)
+        })
+        .catch(function(err) {
+          console.log('Sync error', err)
+        })
+    })
+  } else {
+    // Fallback for browsers that don't support Background Sync i.e. SyncManager
+    sendData()
+  }
+})
+
 function createCards(data) {
   clearCards()
   for (var i = 0; i < data.length; i++) {
@@ -110,8 +178,6 @@ function updateUI(data) {
 // STRATEGY: CACHE THEN NETWORK updates //
 //////////////////////////////////////////
 
-// Set your firebase url, add .json at the end
-var getUrl = ''
 var netDataReceived = false
 
 fetch(getUrl)
