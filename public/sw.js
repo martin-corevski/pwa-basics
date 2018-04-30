@@ -1,7 +1,7 @@
 importScripts('/src/js/idb.js')
 importScripts('/src/js/utility.js')
 
-var STATIC_CACHE_NAME = 'static-v15'
+var STATIC_CACHE_NAME = 'static-v16'
 var DYNAMIC_CACHE_NAME = 'dynamic-v5'
 var STATIC_FILES = [
   '/',
@@ -264,6 +264,10 @@ self.addEventListener('fetch', function(event) {
   }
 })
 
+/////////////////////
+// BACKGROUND SYNC //
+/////////////////////
+
 // This event will fire up when we have POST data for background sync, for both
 // offline and online cases. For offline as soon as we get internet connection,
 // for online right away or if the user closed the app on the next "login".
@@ -306,4 +310,89 @@ self.addEventListener('sync', function(event) {
       })
     )
   }
+})
+
+////////////////////////
+// PUSH NOTIFICATIONS //
+////////////////////////
+
+// If an action is clicked, for this example there are two actions set in app.js
+// confirm and cancel.
+self.addEventListener('notificationclick', function(event) {
+  var notification = event.notification
+  var action = event.action
+
+  console.log(notification)
+
+  // This is a check against the defined actions in app js, the action property
+  // serves as an id.
+  if (action === 'confirm') {
+    console.log('Confirm clicked')
+  } else {
+    // If the user clicks on the notification open or refresh the page in the
+    // browser
+    console.log(action)
+    event.waitUntil(
+      // clients refers to all browser tabs related to this service worker
+      clients.matchAll().then(function(cls) {
+        // In other words cls returns everything managed by the service worker.
+        // Client will be one of the open window tabs in which the service worker
+        // is active.
+        var client = cls.find(function(c) {
+          return (c.visibilityState = 'visible')
+        })
+
+        if (client !== undefined) {
+          // If the application is open in the browser refresh it
+          client.navigate(notification.data.url)
+          client.focus()
+        } else {
+          // In any other case open it in the browser. Since it's the user that
+          // clicked on the push notification this should be the expected
+          // behaviour.
+          clients.openWindow(notification.data.url)
+        }
+      })
+    )
+  }
+  notification.close()
+})
+
+// Closing a notification can happen when swipping, pressing X or clearing all
+// notifications
+self.addEventListener('notificationclose', function(event) {
+  console.log('Notification was closed', event)
+})
+
+// The service worker is always running in the background and that is why it's
+// a good place to listen to push notifications here. The service worker will
+// get a push notification only if sw is already subscribed (part of the subs)
+// table in the database and the backend has notifications that are meant for
+// this service worker. The service worker gets chrome id and every sw is
+// connected to a specific browser.
+self.addEventListener('push', function(event) {
+  console.log('Push Notification received', event)
+
+  var data = {
+    title: 'Dummy title',
+    content: 'Dummy push notification as fallback',
+    openUrl: '/'
+  }
+  if (event.data) {
+    data = JSON.parse(event.data.text())
+  }
+
+  // Push notification options
+  var options = {
+    body: data.content,
+    icon: '/src/images/icons/app-icon-96x96.png',
+    badge: '/src/images/icons/app-icon-96x96.png',
+    // Additional data sent with the notification.
+    data: {
+      url: data.openUrl
+    }
+  }
+
+  // Listen for and show push notifications
+  event.waitUntil(self.registration.showNotification(data.title, options))
 })
