@@ -7,6 +7,7 @@ var sharedMomentsArea = document.querySelector('#shared-moments')
 var form = document.querySelector('form')
 var inputTitle = document.querySelector('#title')
 var inputLocation = document.querySelector('#location')
+var manLocation = document.querySelector('#manual-location')
 
 var videoPlayer = document.querySelector('#player')
 var canvasElement = document.querySelector('#canvas')
@@ -14,13 +15,20 @@ var btnCapture = document.querySelector('#capture-btn')
 var imagePicker = document.querySelector('#image-picker')
 var imagePickerArea = document.querySelector('#pick-image')
 var picture
+var btnLocation = document.querySelector('#location-btn')
+var loaderLocation = document.querySelector('#location-loader')
+var fetchedLocation = { lat: 0, lng: 0 }
+var sawAlert
 
 // Set your firebase url, add .json at the end
 var getUrl = ''
 // Set your firebase functions url
 var postUrl = ''
 
-// Camera management
+///////////////////////
+// Camera management //
+///////////////////////
+
 function initializeMedia() {
   // under mediaDevices are camera, mic...
   if (!('mediaDevices' in navigator)) {
@@ -95,9 +103,63 @@ imagePicker.addEventListener('change', function(event) {
   picture = event.target.files[0]
 })
 
+///////////////////////////
+// Camera management end //
+///////////////////////////
+
+/////////////////
+// Geolocation //
+/////////////////
+
+function initializeLocation() {
+  if (!('geolocation' in navigator)) {
+    btnLocation.style.display = 'none'
+  }
+}
+
+btnLocation.addEventListener('click', function(event) {
+  if (!('geolocation' in navigator)) {
+    return
+  }
+
+  btnLocation.style.display = 'none'
+  loaderLocation.style.display = 'block'
+
+  // The user gets automatic prompt to allow or deny location feature
+  navigator.geolocation.getCurrentPosition(
+    function(position) {
+      console.log('getCurrentPosition obtained the position ', position)
+      btnLocation.style.display = 'inline'
+      loaderLocation.style.display = 'none'
+      fetchedLocation = { lat: position.coords.latitude, lng: 0 }
+      inputLocation.value = 'On the moon'
+      manLocation.classList.add('is-focused')
+    },
+    function(err) {
+      console.log('Error on getCurrentPosition ', err)
+      btnLocation.style.display = 'inline'
+      loaderLocation.style.display = 'none'
+      if (!sawAlert) {
+        alert(`Can't fetch location, please use manual input.`)
+        sawAlert = true
+      }
+      fetchedLocation = { lat: 0, lng: 0 }
+    },
+    {
+      // How long we should be trying to obtain the device location
+      timeout: 7000
+    }
+  )
+})
+
+/////////////////////
+// Geolocation end //
+/////////////////////
+
 function openCreatePostModal() {
   createPostArea.style.display = 'block'
   initializeMedia()
+  initializeLocation()
   // Handle when the app install banner appears
   if (defferedPrompt) {
     defferedPrompt.prompt()
@@ -126,9 +188,18 @@ function openCreatePostModal() {
 
 function closeCreatePostModal() {
   createPostArea.style.display = 'none'
+  btnCapture.style.display = 'inline'
   videoPlayer.style.display = 'none'
   imagePickerArea.style.display = 'none'
   canvasElement.style.display = 'none'
+  btnLocation.style.display = 'inline'
+  loaderLocation.style.display = 'none'
+
+  if (videoPlayer.srcObject) {
+    videoPlayer.srcObject.getVideoTracks().forEach(function(track) {
+      track.stop()
+    })
+  }
 }
 
 shareImageButton.addEventListener('click', openCreatePostModal)
@@ -192,6 +263,8 @@ function sendData() {
   postData.append('id', today)
   postData.append('title', inputTitle.value)
   postData.append('location', inputLocation.value)
+  postData.append('rawLocationLat', fetchedLocation.lat)
+  postData.append('rawLocationLng', fetchedLocation.lng)
   postData.append('file', picture, today + '.png')
 
   fetch(postUrl, {
@@ -219,7 +292,8 @@ form.addEventListener('submit', function(event) {
         id: new Date().toISOString(),
         title: inputTitle.value,
         location: inputLocation.value,
-        picture: picture
+        picture: picture,
+        rawLocation: fetchedLocation
       }
       // Keep the POST data in indexedDB in specific Object store
       writeData('sync-posts', post)
