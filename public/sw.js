@@ -1,8 +1,8 @@
 importScripts('/src/js/idb.js')
 importScripts('/src/js/utility.js')
 
-var STATIC_CACHE_NAME = 'static-v16'
-var DYNAMIC_CACHE_NAME = 'dynamic-v5'
+var STATIC_CACHE_NAME = 'static-v23'
+var DYNAMIC_CACHE_NAME = 'dynamic-v6'
 var STATIC_FILES = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ var STATIC_FILES = [
   '/src/js/idb.js',
   '/src/js/app.js',
   '/src/js/feed.js',
+  '/src/js/utility.js',
   '/src/js/material.min.js',
   '/src/css/app.css',
   '/src/css/feed.css',
@@ -279,18 +280,15 @@ self.addEventListener('sync', function(event) {
     event.waitUntil(
       readAllData('sync-posts').then(function(data) {
         for (dt of data) {
+          var postData = new FormData()
+          postData.append('id', dt.id)
+          postData.append('title', dt.title)
+          postData.append('location', dt.location)
+          postData.append('file', dt.picture, dt.id + '.png')
+
           fetch(postUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json'
-            },
-            body: JSON.stringify({
-              id: dt.id,
-              title: dt.title,
-              location: dt.location,
-              image: 'xXx'
-            })
+            body: postData
           })
             .then(function(res) {
               console.log('Data sent: ', res)

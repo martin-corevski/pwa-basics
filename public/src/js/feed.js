@@ -8,13 +8,96 @@ var form = document.querySelector('form')
 var inputTitle = document.querySelector('#title')
 var inputLocation = document.querySelector('#location')
 
+var videoPlayer = document.querySelector('#player')
+var canvasElement = document.querySelector('#canvas')
+var btnCapture = document.querySelector('#capture-btn')
+var imagePicker = document.querySelector('#image-picker')
+var imagePickerArea = document.querySelector('#pick-image')
+var picture
+
 // Set your firebase url, add .json at the end
 var getUrl = ''
 // Set your firebase functions url
 var postUrl = ''
 
+// Camera management
+function initializeMedia() {
+  // under mediaDevices are camera, mic...
+  if (!('mediaDevices' in navigator)) {
+    navigator.mediaDevices = {}
+  }
+
+  // fallback/polyfill code
+  if (!('getUserMedia' in navigator.mediaDevices)) {
+    navigator.mediaDevices.getUserMedia = function(constraints) {
+      // Get the native safari or mozilla user media
+      var getUserMedia =
+        navigator.webkitGetUserMedia || navigator.mozGetUserMedia
+
+      if (!getUserMedia) {
+        // return promise because of the new getUserMedia returns Promise and
+        // we are trying to recreate th getUserMedia property even for browsers
+        // that don't support it yet but have some way of using the devices
+        // media.
+        return Promise.reject(new Error('getUserMedia is not supported!'))
+      }
+
+      return new Promise(function(resolve, reject) {
+        // This way we are making use of the safari and mozilla media usage
+        // implementation.
+        getUserMedia.call(navigator, constraints, resolve, reject)
+      })
+    }
+  }
+
+  // Now that we always have mediaDevices and getUserMedia available, even in
+  // older browsers we can access video and audio of the device. Permission is
+  // granted by the user when this function is executed. The user can either
+  // accept or reject sharing the camera or microphone or both. Once permission
+  // is granted the user won't get the notification again.
+  navigator.mediaDevices
+    .getUserMedia({ video: true })
+    .then(function(stream) {
+      // User accepted.
+      videoPlayer.srcObject = stream
+      videoPlayer.style.display = 'block'
+    })
+    .catch(function(err) {
+      // The user rejected, browser doesn't support or the device doesn't have
+      // camera. Now we fallback to the image picker.
+      imagePickerArea.style.display = 'block'
+    })
+}
+
+btnCapture.addEventListener('click', function(event) {
+  // Reveal the canvas and hide the video player with the button.
+  canvasElement.style.display = 'block'
+  videoPlayer.style.display = 'none'
+  btnCapture.style.display = 'none'
+  // Set the captured video on the canvas.
+  var context = canvasElement.getContext('2d')
+  context.drawImage(
+    videoPlayer,
+    0,
+    0,
+    canvasElement.width,
+    videoPlayer.videoHeight / (videoPlayer.videoWidth / canvasElement.width)
+  )
+  // Stop the camera.
+  videoPlayer.srcObject.getVideoTracks().forEach(function(track) {
+    track.stop()
+  })
+  // Prepare the picture for upload.
+  picture = dataURItoBlob(canvasElement.toDataURL())
+})
+
+imagePicker.addEventListener('change', function(event) {
+  picture = event.target.files[0]
+})
+
 function openCreatePostModal() {
   createPostArea.style.display = 'block'
+  initializeMedia()
   // Handle when the app install banner appears
   if (defferedPrompt) {
     defferedPrompt.prompt()
@@ -43,6 +126,9 @@ function openCreatePostModal() {
 
 function closeCreatePostModal() {
   createPostArea.style.display = 'none'
+  videoPlayer.style.display = 'none'
+  imagePickerArea.style.display = 'none'
+  canvasElement.style.display = 'none'
 }
 
 shareImageButton.addEventListener('click', openCreatePostModal)
@@ -101,18 +187,16 @@ function createCard(data) {
 
 // POST data fallback function if SyncManager is not available
 function sendData() {
+  var postData = new FormData()
+  var today = new Date().toISOString()
+  postData.append('id', today)
+  postData.append('title', inputTitle.value)
+  postData.append('location', inputLocation.value)
+  postData.append('file', picture, today + '.png')
+
   fetch(postUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: JSON.stringify({
-      id: new Date().toISOString(),
-      title: inputTitle.value,
-      location: inputLocation.value,
-      image: 'xXx'
-    })
+    body: postData
   }).then(function(res) {
     console.log('Data sent: ', res)
     // updateUI()
@@ -134,7 +218,8 @@ form.addEventListener('submit', function(event) {
       var post = {
         id: new Date().toISOString(),
         title: inputTitle.value,
-        location: inputLocation.value
+        location: inputLocation.value,
+        picture: picture
       }
       // Keep the POST data in indexedDB in specific Object store
       writeData('sync-posts', post)
