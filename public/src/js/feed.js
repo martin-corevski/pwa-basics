@@ -140,7 +140,7 @@ btnLocation.addEventListener('click', function(event) {
       btnLocation.style.display = 'inline'
       loaderLocation.style.display = 'none'
       if (!sawAlert) {
-        alert(`Can't fetch location, please use manual input.`)
+        alert("Can't fetch location, please use manual input.")
         sawAlert = true
       }
       fetchedLocation = { lat: 0, lng: 0 }

@@ -10,7 +10,8 @@ var vapidPublicKey = ''
 if ('serviceWorker' in navigator) {
   // If service worker is available in the browser, register it
   navigator.serviceWorker
-    .register('/sw.js')
+    // .register('/sw.js')
+    .register('/service-worker.js')
     .then(function() {
       console.log('Service worker registered!')
     })
